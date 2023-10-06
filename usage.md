@@ -103,3 +103,12 @@ end;
     select *
     from table( as_xlsx.read( as_xlsx.file2blob( 'MY_DIR', 'test.xlsx' ), '1' ) )
 ~~~
+~~~
+begin
+  as_xlsx.clear_workbook;
+  as_xlsx.new_sheet;
+  as_xlsx.add_image( 1, 1, as_barcode.barcode( 'https://github.com/antonscheffer/as_xlsx', 'QR' ) );
+  as_xlsx.cell( 1, 8, 'now with png images' );
+  as_xlsx.save( 'APEX_HPROF_DIRECTORY', 'my.xlsx' );
+end;
+~~~
