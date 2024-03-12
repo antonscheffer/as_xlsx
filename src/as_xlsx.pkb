@@ -2398,7 +2398,7 @@ style="position:absolute;margin-left:35.25pt;margin-top:3pt;z-index:' || to_char
     l_buf raw(14);
     l_hex varchar2(8);
   begin
-    select ora_hash( p_img ) into l_hash from dual;
+    select ora_hash( dbms_lob.substr( p_img ) ) into l_hash from dual;
     for i in 1 .. workbook.images.count
     loop
       if workbook.images(i).hash = l_hash
