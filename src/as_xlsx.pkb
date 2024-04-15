@@ -2219,6 +2219,7 @@ style="position:absolute;margin-left:35.25pt;margin-top:3pt;z-index:' || to_char
     t_useXf boolean := g_useXf;
     type tp_XfIds is table of varchar2(50) index by pls_integer;
     t_XfIds tp_XfIds;
+    t_null_number number;
   begin
     if p_sheet is null
     then
@@ -2267,6 +2268,8 @@ style="position:absolute;margin-left:35.25pt;margin-top:3pt;z-index:' || to_char
                 if n_tab( i + n_tab.first() ) is not null
                 then
                   cell( c, t_cur_row + i, n_tab( i + n_tab.first() ), p_sheet => t_sheet );
+                else
+                  cell( c, t_cur_row + i, t_null_number, p_sheet => t_sheet );
                 end if;
               end loop;
               n_tab.delete;
@@ -2283,6 +2286,8 @@ style="position:absolute;margin-left:35.25pt;margin-top:3pt;z-index:' || to_char
                   else
                     query_date_cell( c, t_cur_row + i, d_tab( i + d_tab.first() ), t_sheet, t_XfIds(c) );
                   end if;
+                else
+                  cell( c, t_cur_row + i, t_null_number, p_sheet => t_sheet );
                 end if;
               end loop;
               d_tab.delete;
@@ -2294,6 +2299,8 @@ style="position:absolute;margin-left:35.25pt;margin-top:3pt;z-index:' || to_char
                 if v_tab( i + v_tab.first() ) is not null
                 then
                   cell( c, t_cur_row + i, v_tab( i + v_tab.first() ), p_sheet => t_sheet );
+                else
+                  cell( c, t_cur_row + i, t_null_number, p_sheet => t_sheet );
                 end if;
               end loop;
               v_tab.delete;
