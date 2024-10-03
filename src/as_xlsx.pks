@@ -60,6 +60,8 @@ is
 **     changed to date1904=false
 **   Date: 05-10-2023
 **      added as_read_xlsx
+**   Date: 03-10-2024
+**      added a parameter p_print_null_cells in funtion read
 ******************************************************************************
 ******************************************************************************
 Copyright (C) 2011, 2023 by Anton Scheffer
@@ -389,14 +391,14 @@ use p_width and p_height to pass the size of an image which is not a png, jpg, o
     , p_height pls_integer := null
     );
   --
-  function read( p_xlsx blob, p_sheets varchar2 := null, p_cell varchar2 := null )
+  function read( p_xlsx blob, p_sheets varchar2 := null, p_cell varchar2 := null, p_print_null_cells varchar2 := 'FALSE' )
   return tp_all_cells pipelined;
   --
-  function get_sheet_names( p_xlsx blob )
-  return sheet_names;
+  function get_sheet_names( p_xlsx blob )  return sheet_names;
   --
-  function file2blob( p_dir varchar2, p_file_name varchar2 )
-  return blob;
+  function get_sheet_names_string( p_xlsx blob ) return varchar2;
+  function file2blob( p_dir varchar2, p_file_name varchar2 )  return blob;
   --
+  function split(p_list      in varchar2,
+                 p_delimiter in varchar2 default null) return t_str_array  pipelined;
 end;
-/
