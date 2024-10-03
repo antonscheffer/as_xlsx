@@ -1,7 +1,7 @@
 create or replace package body as_xlsx
 is
   --
-  c_version constant varchar2(20) := 'as_xlsx40';
+  c_version constant varchar2(20) := 'as_xlsx41';
 --
   c_lob_duration constant pls_integer := dbms_lob.call;
   c_LOCAL_FILE_HEADER        constant raw(4) := hextoraw( '504B0304' ); -- Local file header signature
@@ -2818,7 +2818,46 @@ style="position:absolute;margin-left:35.25pt;margin-top:3pt;z-index:' || to_char
     return l_rv;
   end;
   --
-  function read( p_xlsx blob, p_sheets varchar2 := null, p_cell varchar2 := null )
+  function split(p_list      in varchar2,
+                 p_delimiter in varchar2 default null) return t_str_array
+    pipelined is
+    pattern varchar2(10) :=  '[^'||nvl(p_delimiter,',')||']+';
+  begin
+    for r1 in (select cast(regexp_substr(p_list, pattern, 1, level) as varchar2(1000)) ds_valor
+                      from dual
+                   connect by regexp_substr(p_list, pattern, 1, level) is not null
+      ) loop
+      pipe row(r1.ds_valor);
+    end loop;
+  end;  
+  --
+  function get_next_cell(p_cell varchar2) return varchar2 is
+    ret varchar2(10);
+  begin
+    select min(column_value)
+      into ret
+      from table(split('A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X,Y,Z', ',')) 
+      where column_value > p_cell
+     order by column_value;
+    
+    ret := ret || (substr(p_cell, 2));
+    return ret;
+  end;  
+  --
+  function get_sheet_names_string( p_xlsx blob ) return varchar2 is
+    l_sheet_names sheet_names;
+    ret           varchar2(4000);
+  begin
+    l_sheet_names := get_sheet_names(p_xlsx => p_xlsx);
+    if l_sheet_names.count > 0 then
+      for i in l_sheet_names.first .. l_sheet_names.last loop
+        ret := ret || case when ret is not null then ', ' end || l_sheet_names(i);
+      end loop;
+    end if;
+    return ret;
+  end;
+  --
+  function read( p_xlsx blob, p_sheets varchar2 := null, p_cell varchar2 := null, p_print_null_cells  varchar2 := 'FALSE' )
   return tp_all_cells pipelined
   is
     l_nr            number;
@@ -2835,6 +2874,9 @@ style="position:absolute;margin-left:35.25pt;margin-top:3pt;z-index:' || to_char
     l_date_styles tp_boolean_tab;
     l_time_styles tp_boolean_tab;
     l_one_cell    tp_one_cell;
+    --
+    l_last_one_cell tp_one_cell;
+    l_one_cell_null tp_one_cell;
   begin
     l_cnt := get_count( p_xlsx );
     for i in 1 .. l_cnt
@@ -2939,6 +2981,8 @@ style="position:absolute;margin-left:35.25pt;margin-top:3pt;z-index:' || to_char
           if utl_raw.cast_to_varchar2( l_cfh.name1 ) like '%' || r_x.target
           then
             l_file := parse_file( p_xlsx, l_cfh );
+            --
+            l_last_one_cell := null;
             for r_c in ( select *
                          from xmltable( xmlnamespaces( default 'http://schemas.openxmlformats.org/spreadsheetml/2006/main' ),
                                        '/worksheet/sheetData/row/c'
@@ -2968,6 +3012,7 @@ style="position:absolute;margin-left:35.25pt;margin-top:3pt;z-index:' || to_char
               else
                 l_one_cell.col_nr := col_alfan( rtrim( r_c.r, '0123456789' ) );
               end if;
+              
               l_one_cell.row_nr     := coalesce( r_c.rw, l_one_cell.row_nr + 1 );
               l_one_cell.cell       := r_c.r;
               l_one_cell.formula    := r_c.f;
@@ -3029,6 +3074,35 @@ style="position:absolute;margin-left:35.25pt;margin-top:3pt;z-index:' || to_char
                                            else r_c.v
                                         end;
               end if;
+              if upper(p_print_null_cells) in ('YES', 'TRUE', 'Y') then
+                --dbms_output.put_line('l_one_cell.row_nr='||l_one_cell.row_nr||' - l_last_one_cell.row_nr='||l_last_one_cell.row_nr||' - l_one_cell.col_nr='||l_one_cell.col_nr||' - l_last_one_cell.col_nr='||l_last_one_cell.col_nr);
+                l_one_cell_null.cell_type  := 'S';
+                l_one_cell_null.formula    := null;
+                l_one_cell_null.string_val := null;
+                l_one_cell_null.number_val := null;
+                l_one_cell_null.date_val   := null;
+                l_one_cell_null.cell       := null;
+                if (l_one_cell.col_nr - l_last_one_cell.col_nr > 1 and l_one_cell.row_nr = l_last_one_cell.row_nr) then
+                  l_one_cell_null.sheet_nr   := l_last_one_cell.sheet_nr;
+                  l_one_cell_null.sheet_name := l_last_one_cell.sheet_name;
+                  for r1 in (select level add_col_nr from dual connect by level <= l_one_cell.col_nr - nvl(l_last_one_cell.col_nr, 0) - 1) loop
+                    l_one_cell_null.row_nr     := l_one_cell.row_nr;
+                    l_one_cell_null.col_nr     := l_last_one_cell.col_nr + r1.add_col_nr;
+                    l_one_cell_null.cell       := get_next_cell(nvl(l_one_cell_null.cell, l_last_one_cell.cell));
+                    pipe row (l_one_cell_null);
+                  end loop;
+                elsif (l_one_cell.row_nr != l_last_one_cell.row_nr and l_one_cell.col_nr > 1) then                   
+                  l_one_cell_null.sheet_nr   := l_one_cell.sheet_nr;
+                  l_one_cell_null.sheet_name := l_one_cell.sheet_name;
+                  for r1 in (select level add_col_nr from dual connect by level <= l_one_cell.col_nr - 1) loop
+                    l_one_cell_null.row_nr     := l_one_cell.row_nr;
+                    l_one_cell_null.col_nr     := r1.add_col_nr;
+                    l_one_cell_null.cell       := case when l_one_cell_null.cell is null then 'A'||l_one_cell.row_nr else get_next_cell(l_one_cell_null.cell) end;
+                    pipe row (l_one_cell_null);
+                  end loop;  
+                end if;
+                l_last_one_cell := l_one_cell;
+              end if;                                          
               pipe row( l_one_cell );
             end loop;
             dbms_lob.freetemporary( l_file );
@@ -3047,4 +3121,3 @@ style="position:absolute;margin-left:35.25pt;margin-top:3pt;z-index:' || to_char
   end;
   --
 end;
-/
