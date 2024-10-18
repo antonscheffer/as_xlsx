@@ -59,7 +59,12 @@ is
 **     use default date format in query2sheet
 **     changed to date1904=false
 **   Date: 05-10-2023
-**      added as_read_xlsx
+**     added as_read_xlsx
+**   Date: 15-11-2023
+**     Support for reading Strict Open XML Spreadsheet
+**     Added clob_val and string_len
+**   Date: 18-10-2024
+**     fix for add_image with images larger than 2000 bytes
 ******************************************************************************
 ******************************************************************************
 Copyright (C) 2011, 2023 by Anton Scheffer
@@ -85,7 +90,7 @@ THE SOFTWARE.
 ******************************************************************************
 ******************************************** */
 --
-  use_utl_file  constant boolean := true;
+  use_utl_file constant boolean := true;
 --
   type tp_alignment is record
     ( vertical varchar2(11)
@@ -104,6 +109,8 @@ THE SOFTWARE.
     , number_val number
     , date_val date
     , formula varchar2(4000)
+    , clob_val clob
+    , string_len integer
   );
   type tp_all_cells is table of tp_one_cell;
 --
@@ -389,7 +396,12 @@ use p_width and p_height to pass the size of an image which is not a png, jpg, o
     , p_height pls_integer := null
     );
   --
-  function read( p_xlsx blob, p_sheets varchar2 := null, p_cell varchar2 := null )
+  function read
+    ( p_xlsx          blob
+    , p_sheets        varchar2 := null
+    , p_cell          varchar2 := null
+    , p_include_clobs varchar2 := null
+    )
   return tp_all_cells pipelined;
   --
   function get_sheet_names( p_xlsx blob )
@@ -398,5 +410,8 @@ use p_width and p_height to pass the size of an image which is not a png, jpg, o
   function file2blob( p_dir varchar2, p_file_name varchar2 )
   return blob;
   --
-end;
+  function get_version
+  return varchar2;
+  --
+end as_xlsx;
 /
