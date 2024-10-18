@@ -1,7 +1,7 @@
 create or replace package body as_xlsx
 is
   --
-  c_version constant varchar2(20) := 'as_xlsx40';
+  c_version constant varchar2(20) := 'as_xlsx42';
 --
   c_lob_duration constant pls_integer := dbms_lob.call;
   c_LOCAL_FILE_HEADER        constant raw(4) := hextoraw( '504B0304' ); -- Local file header signature
@@ -419,10 +419,11 @@ $END
   function col_alfan( p_col varchar2 )
   return pls_integer
   is
+    l_col varchar2(1000) := rtrim( p_col, '0123456789' );
   begin
-    return ascii( substr( p_col, -1 ) ) - 64
-         + nvl( ( ascii( substr( p_col, -2, 1 ) ) - 64 ) * 26, 0 )
-         + nvl( ( ascii( substr( p_col, -3, 1 ) ) - 64 ) * 676, 0 );
+    return ascii( substr( l_col, -1 ) ) - 64
+         + nvl( ( ascii( substr( l_col, -2, 1 ) ) - 64 ) * 26, 0 )
+         + nvl( ( ascii( substr( l_col, -3, 1 ) ) - 64 ) * 676, 0 );
   end;
   --
   procedure clear_workbook
@@ -1401,6 +1402,7 @@ $END
     t_xxx := t_xxx || '
 </Types>';
     add1xml( t_excel, '[Content_Types].xml', t_xxx );
+    --
     t_xxx := ( '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:dcmitype="http://purl.org/dc/dcmitype/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
 <dc:creator>' || sys_context( 'userenv', 'os_user' ) || '</dc:creator>
@@ -1533,7 +1535,7 @@ $END
     t_xxx := '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
 <fileVersion appName="xl" lastEdited="5" lowestEdited="5" rupBuild="9302"/>
-<workbookPr date1904="false" defaultThemeVersion="124226"/>
+<workbookPr defaultThemeVersion="124226"/>
 <bookViews>
 <workbookView xWindow="120" yWindow="45" windowWidth="19155" windowHeight="4935"/>
 </bookViews>
@@ -2405,7 +2407,11 @@ style="position:absolute;margin-left:35.25pt;margin-top:3pt;z-index:' || to_char
     l_buf raw(14);
     l_hex varchar2(8);
   begin
-    select ora_hash( dbms_lob.substr( p_img ) ) into l_hash from dual;
+    select ora_hash( dbms_lob.substr( p_img, 2000 ) )
+         + ( nvl( ora_hash( dbms_lob.substr( p_img, 2000, 2001 ) ), 0 )
+           + nvl( ora_hash( dbms_lob.substr( p_img, 2000, 4001 ) ), 0 ) * 4294967296
+           ) * 4294967296
+    into l_hash from dual;
     for i in 1 .. workbook.images.count
     loop
       if workbook.images(i).hash = l_hash
@@ -2420,7 +2426,7 @@ style="position:absolute;margin-left:35.25pt;margin-top:3pt;z-index:' || to_char
       dbms_lob.createtemporary( l_image.img, true );
       dbms_lob.copy( l_image.img, p_img, dbms_lob.lobmaxsize, 1, 1 );
       l_image.hash := l_hash;
---
+      --
       l_buf := dbms_lob.substr( p_img, 14, 1 );
       if utl_raw.substr( l_buf, 1, 8 ) = hextoraw( '89504E470D0A1A0A' )
       then -- png
@@ -2505,10 +2511,10 @@ style="position:absolute;margin-left:35.25pt;margin-top:3pt;z-index:' || to_char
         l_image.width  := nvl( p_width, 0 );
         l_image.height := nvl( p_height, 0 );
       end if;
---
+      --
       workbook.images( l_idx ) := l_image;
     end if;
---
+    --
     l_drawing.img_id := l_idx;
     l_drawing.row := p_row;
     l_drawing.col := p_col;
@@ -2517,7 +2523,7 @@ style="position:absolute;margin-left:35.25pt;margin-top:3pt;z-index:' || to_char
     l_drawing.title := p_title;
     l_drawing.description := p_description;
     workbook.sheets( l_sheet ).drawings( workbook.sheets( l_sheet ).drawings.count + 1 ) := l_drawing;
-  end;
+  end add_image;
 --
   function get_encoding( p_encoding varchar2 := null )
   return varchar2
@@ -2784,7 +2790,7 @@ style="position:absolute;margin-left:35.25pt;margin-top:3pt;z-index:' || to_char
         dbms_lob.freetemporary( file_blob );
       end if;
       raise;
-  end;
+  end file2blob;
   --
   function get_sheet_names( p_xlsx blob )
   return sheet_names
@@ -2808,33 +2814,43 @@ style="position:absolute;margin-left:35.25pt;margin-top:3pt;z-index:' || to_char
       l_workbook := parse_file( p_xlsx, l_cfh );
       select xt1.name
       bulk collect into l_rv
-      from xmltable( xmlnamespaces( default 'http://schemas.openxmlformats.org/spreadsheetml/2006/main' ),
-                     '/workbook/sheets/sheet'
+      from xmltable( xmlnamespaces( default 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'
+                                  , 'http://purl.oclc.org/ooxml/spreadsheetml/main' as "x" )
+                   , '( /workbook/sheets/sheet, /x:workbook/x:sheets/x:sheet )'
                      passing xmltype( xmldata => l_workbook, csid=> nls_charset_id( 'AL32UTF8' ) )
                      columns
-                       name    varchar2( 4000 ) path '@name'
+                       name varchar2(4000) path '@name'
                    ) xt1;
     end if;
     return l_rv;
-  end;
+  end get_sheet_names;
   --
-  function read( p_xlsx blob, p_sheets varchar2 := null, p_cell varchar2 := null )
+  function read
+    ( p_xlsx          blob
+    , p_sheets        varchar2 := null
+    , p_cell          varchar2 := null
+    , p_include_clobs varchar2 := null
+    )
   return tp_all_cells pipelined
   is
-    l_nr            number;
-    l_cnt           pls_integer;
-    l_cfh           tp_cfh;
-    l_name          varchar2(32767);
-    l_workbook      blob;
-    l_workbook_rels blob;
-    l_file          blob;
-    l_csid_utf8     integer := nls_charset_id( 'AL32UTF8' );
-    type tp_strings     is table of varchar2(4000 char );
+    l_nr             number;
+    l_cnt            pls_integer;
+    l_cfh            tp_cfh;
+    l_name           varchar2(32767);
+    l_workbook       blob;
+    l_workbook_rels  blob;
+    l_shared_strings blob;
+    l_file           blob;
+    l_csid_utf8      integer := nls_charset_id( 'AL32UTF8' );
+    type tp_strings     is table of varchar2(32767);
+    type tp_string_lens is table of varchar2(32767);
     type tp_boolean_tab is table of boolean index by pls_integer;
-    l_strings     tp_strings;
-    l_date_styles tp_boolean_tab;
-    l_time_styles tp_boolean_tab;
-    l_one_cell    tp_one_cell;
+    l_strings      tp_strings;
+    l_string_lens  tp_string_lens;
+    l_quote_prefix tp_boolean_tab;
+    l_date_styles  tp_boolean_tab;
+    l_time_styles  tp_boolean_tab;
+    l_one_cell     tp_one_cell;
   begin
     l_cnt := get_count( p_xlsx );
     for i in 1 .. l_cnt
@@ -2846,46 +2862,60 @@ style="position:absolute;margin-left:35.25pt;margin-top:3pt;z-index:' || to_char
       elsif l_name like '%workbook.xml.rels' then
         l_workbook_rels := parse_file( p_xlsx, l_cfh );
       elsif l_name like '%sharedstrings.xml' then
-        l_file := parse_file( p_xlsx, l_cfh );
+        l_shared_strings := parse_file( p_xlsx, l_cfh );
         select xt1.txt
-        bulk collect into l_strings
-        from xmltable( xmlnamespaces( default 'http://schemas.openxmlformats.org/spreadsheetml/2006/main' ),
-                       '/sst/si'
-                       passing xmltype( xmldata => l_file, csid=> l_csid_utf8 )
-                       columns txt varchar2(4000 char) path 'substring( string-join(.//t/text(), "" ), 1, 3999 )'
+             , xt1.len
+        bulk collect into l_strings, l_string_lens
+        from xmltable( xmlnamespaces( default 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'
+                                    , 'http://purl.oclc.org/ooxml/spreadsheetml/main' as "x" )
+                     , '( /sst/si, /x:sst/x:si )'
+                       passing xmltype( xmldata => l_shared_strings, csid=> l_csid_utf8 )
+                       columns txt varchar2(4000 char) path 'substring( string-join(.//*:t/text(), "" ), 1, 3999 )'
+                             , len integer             path 'string-length( string-join(.//*:t/text(), "" ) )'
                      ) xt1;
-        dbms_lob.freetemporary( l_file );
       elsif l_name like '%styles.xml' then
         l_file := parse_file( p_xlsx, l_cfh );
-        for r_n in ( select to_char( rownum ) seq
-                          , xt1.id
-                          , xt2.format
-                     from xmltable( xmlnamespaces( default 'http://schemas.openxmlformats.org/spreadsheetml/2006/main' ),
-                                    '/styleSheet/cellXfs/xf'
-                                    passing xmltype( xmldata => l_file, csid=> l_csid_utf8 )
-                                    columns id     integer        path '@numFmtId'
+        for r_n in ( select xt2.seq - 1 seq
+                          , xt2.id
+                          , xt2.quoteprefix
+                          , lower( xt3.format ) format
+                     from xmltable( xmlnamespaces( default 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'
+                                                 , 'http://purl.oclc.org/ooxml/spreadsheetml/main' as "x" )
+                                  , '( /styleSheet, /x:styleSheet )'
+                                    passing xmltype( xmldata => l_file, csid=> nls_charset_id( 'AL32UTF8' ) )
+                                      columns cellxfs xmltype path '( cellXfs, x:cellXfs )'
+                                            , numfmts xmltype path '( numFmts, x:numFmts )'
                                   ) xt1
+                     cross join
+                          xmltable( '/*:cellXfs/*:xf'
+                                    passing xt1.cellxfs
+                                      columns seq for ordinality
+                                            , id          integer        path '@numFmtId'
+                                            , quoteprefix varchar2(4000) path '@quotePrefix'
+                                  ) xt2
                      left join
-                          xmltable( xmlnamespaces( default 'http://schemas.openxmlformats.org/spreadsheetml/2006/main' ),
-                                    '/styleSheet/numFmts/numFmt'
-                                    passing xmltype( xmldata => l_file, csid=> l_csid_utf8 )
+                          xmltable( '/*:numFmts/*:numFmt'
+                                    passing xt1.numfmts
                                     columns id     integer        path '@numFmtId'
                                           , format varchar2(4000) path '@formatCode'
-                                  ) xt2
-                     on xt2.id = xt1.id
+                                  ) xt3
+                     on xt3.id = xt2.id
                    )
         loop
           if    r_n.id between 14 and 17
              or instr( r_n.format, 'd' ) > 0
              or instr( r_n.format, 'y' ) > 0
           then
-            l_date_styles( r_n.seq - 1 ) := null;
+            l_date_styles( r_n.seq ) := null;
           elsif r_n.id between 18 and 22
              or r_n.id between 45 and 47
              or instr( r_n.format, 'h' ) > 0
              or instr( r_n.format, 'm' ) > 0
           then
-            l_time_styles( r_n.seq - 1 ) := null;
+            l_time_styles( r_n.seq ) := null;
+          elsif r_n.quoteprefix in ( '1', 'true' )
+          then
+            l_quote_prefix( r_n.seq ) := null;
           end if;
         end loop;
         dbms_lob.freetemporary( l_file );
@@ -2897,27 +2927,31 @@ style="position:absolute;margin-left:35.25pt;margin-top:3pt;z-index:' || to_char
     end if;
     --
     for r_x in ( select xt1.d1904
+                      , xt2.seq
                       , xt2.name
                       , xt3.target
-                      , to_char( rownum ) seq
-                 from xmltable( xmlnamespaces( default 'http://schemas.openxmlformats.org/spreadsheetml/2006/main' ),
-                                '/workbook'
-                                passing xmltype( xmldata => l_workbook, csid=> l_csid_utf8 )
-                                columns d1904   varchar2( 4000 ) path 'workbookPr/@date1904'
-                                      , sheets xmltype path 'sheets'
+                 from xmltable( xmlnamespaces( default 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'
+                                                     , 'http://purl.oclc.org/ooxml/spreadsheetml/main' as "x" )
+                              , '( /workbook, /x:workbook )'
+                                passing xmltype( xmldata => l_workbook, csid=> nls_charset_id( 'AL32UTF8' ) )
+                                columns d1904  varchar2( 4000 ) path '*:workbookPr/@date1904'
+                                      , sheets xmltype path '*:sheets'
                               ) xt1
-                 cross join xmltable( xmlnamespaces(
-                                        'http://schemas.openxmlformats.org/officeDocument/2006/relationships' as "r",
-                                        default 'http://schemas.openxmlformats.org/spreadsheetml/2006/main' ),
-                                      'sheets/sheet'
-                                      passing xt1.sheets
-                                columns name    varchar2( 4000 ) path '@name'
+                 cross join
+                      xmltable( '*:sheets/*:sheet'
+                                passing xt1.sheets
+                                columns seq for ordinality
+                                      , name    varchar2( 4000 ) path '@name'
                                       , sheetid varchar2( 4000 ) path '@sheetId'
-                                      , rid     varchar2( 4000 ) path '@r:id'
+                                      , rid     varchar2( 4000 ) path '@*:id[ namespace-uri(.) =
+                                                                         ( "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+                                                                         , "http://purl.oclc.org/ooxml/officeDocument/relationships"
+                                                                         ) ]'
                                       , state   varchar2( 4000 ) path '@state' ) xt2
-                 join xmltable( xmlnamespaces( default 'http://schemas.openxmlformats.org/package/2006/relationships' ),
-                                '/Relationships/Relationship'
-                                passing xmltype( xmldata => l_workbook_rels, csid=> l_csid_utf8 )
+                 join
+                      xmltable( xmlnamespaces( default 'http://schemas.openxmlformats.org/package/2006/relationships' )
+                              , '/Relationships/Relationship'
+                                passing xmltype( xmldata => l_workbook_rels, csid=> nls_charset_id( 'AL32UTF8' ) )
                                 columns type    varchar2( 4000 ) path '@Type'
                                       , target  varchar2( 4000 ) path '@Target'
                                       , id      varchar2( 4000 ) path '@Id' ) xt3
@@ -2940,16 +2974,18 @@ style="position:absolute;margin-left:35.25pt;margin-top:3pt;z-index:' || to_char
           then
             l_file := parse_file( p_xlsx, l_cfh );
             for r_c in ( select *
-                         from xmltable( xmlnamespaces( default 'http://schemas.openxmlformats.org/spreadsheetml/2006/main' ),
-                                       '/worksheet/sheetData/row/c'
-                                       passing xmltype( xmldata => l_file, csid=> l_csid_utf8 )
-                                       columns v varchar2(4000) path 'v'
-                                             , f varchar2(4000) path 'f'
-                                             , t varchar2(4000) path '@t'
-                                             , r varchar2(32)   path '@r'
-                                             , s integer        path '@s'
-                                             , rw integer      path './../@r'
-                                             , txt varchar2(4000 char) path 'substring( string-join(.//t/text(), "" ), 1, 3999 )'
+                         from xmltable( xmlnamespaces( default 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'
+                                                     , 'http://purl.oclc.org/ooxml/spreadsheetml/main' as "x" )
+                                      , '( /worksheet/sheetData/row/c, /x:worksheet/x:sheetData/x:row/x:c )'
+                                        passing xmltype( xmldata => l_file, csid=> l_csid_utf8 )
+                                        columns v varchar2(4000) path '*:v'
+                                              , f varchar2(4000) path '*:f'
+                                              , t varchar2(4000) path '@t'
+                                              , r varchar2(32)   path '@r'
+                                              , s integer        path '@s'
+                                              , rw integer       path './../@r'
+                                              , txt varchar2(4000 char) path 'substring( string-join(.//*:t/text(), "" ), 1, 3999 )'
+                                              , len integer             path 'string-length( string-join(.//*:t/text(), "" ) )'
                                       )
                        )
             loop
@@ -2966,7 +3002,7 @@ style="position:absolute;margin-left:35.25pt;margin-top:3pt;z-index:' || to_char
                   l_one_cell.col_nr := 1;
                 end if;
               else
-                l_one_cell.col_nr := col_alfan( rtrim( r_c.r, '0123456789' ) );
+                l_one_cell.col_nr := col_alfan( r_c.r );
               end if;
               l_one_cell.row_nr     := coalesce( r_c.rw, l_one_cell.row_nr + 1 );
               l_one_cell.cell       := r_c.r;
@@ -2974,12 +3010,33 @@ style="position:absolute;margin-left:35.25pt;margin-top:3pt;z-index:' || to_char
               l_one_cell.string_val := null;
               l_one_cell.number_val := null;
               l_one_cell.date_val   := null;
+              l_one_cell.clob_val   := null;
+              l_one_cell.string_len := null;
               if r_c.t = 's'
               then
                 l_one_cell.cell_type := 'S';
                 if r_c.v is not null
                 then
                   l_one_cell.string_val := l_strings( to_number( r_c.v ) + 1 );
+                  l_one_cell.string_len := l_string_lens( to_number( r_c.v ) + 1 );
+                  if l_one_cell.string_len > 3999 and substr( p_include_clobs, 1, 1 ) in ( 'Y', 'y', '1' )
+                  then
+                    select xt1.txt
+                    into l_one_cell.clob_val
+                    from xmltable( '/*:sst/*:si[$i]'
+                                   passing xmltype( xmldata => l_shared_strings, csid=> l_csid_utf8 )
+                                         , to_number( r_c.v ) + 1 as "i"
+                                   columns txt clob path 'string-join(.//*:t/text(), "" )'
+                                 ) xt1;
+                  end if;
+                  if l_quote_prefix.exists( r_c.s )
+                  then
+                    l_one_cell.string_val := '''' || l_one_cell.string_val;
+                    if l_one_cell.clob_val is not null
+                    then
+                      l_one_cell.clob_val := '''' || l_one_cell.clob_val;
+                    end if;
+                  end if;
                 end if;
               elsif r_c.t = 'n' or r_c.t is null
               then
@@ -2995,14 +3052,15 @@ style="position:absolute;margin-left:35.25pt;margin-top:3pt;z-index:' || to_char
                   l_one_cell.cell_type := 'D';
                   if lower( r_x.d1904 ) in ( 'true', '1' )
                   then
-                    l_one_cell.date_val := to_date('01-01-1904','DD-MM-YYYY') + l_nr;
+                    l_one_cell.date_val := date '1904-01-01' + l_nr;
                   else
-                    l_one_cell.date_val := to_date('01-03-1900','DD-MM-YYYY') + ( l_nr - 61 );
+                    l_one_cell.date_val := date '1900-03-01' + ( l_nr - 61 );
                   end if;
                 elsif l_time_styles.exists( r_c.s )
                 then
                   l_one_cell.cell_type := 'S';
                   l_one_cell.string_val := to_char( numtodsinterval(  l_nr, 'day' ) );
+                  l_one_cell.string_len := length( l_one_cell.string_val );
                 else
                   l_one_cell.cell_type := 'N';
                   l_nr := round( l_nr, 14 - substr( to_char( l_nr, 'TME' ), -3 ) );
@@ -3016,10 +3074,24 @@ style="position:absolute;margin-left:35.25pt;margin-top:3pt;z-index:' || to_char
               then
                 l_one_cell.cell_type := 'S';
                 l_one_cell.string_val := r_c.txt;
+                l_one_cell.string_len := r_c.len;
+                if     l_one_cell.string_len > 3999
+                   and substr( p_include_clobs, 1, 1 ) in ( 'Y', 'y', '1' )
+                   and r_c.r is not null
+                then
+                  select xt1.txt
+                  into l_one_cell.clob_val
+                  from xmltable( '/*:worksheet/*:sheetData/*:row/*:c[@r=$r]'
+                                 passing xmltype( xmldata => l_file, csid=> l_csid_utf8 )
+                                       , r_c.r as "r"
+                                 columns txt clob path 'string-join(.//*:t/text(), "" )'
+                               ) xt1;
+                end if;
               elsif r_c.t in ( 'str', 'e' )
               then
                 l_one_cell.cell_type := 'S';
                 l_one_cell.string_val := r_c.v;
+                l_one_cell.string_len := length( l_one_cell.string_val );
               elsif r_c.t = 'b'
               then
                 l_one_cell.cell_type := 'S';
@@ -3028,6 +3100,7 @@ style="position:absolute;margin-left:35.25pt;margin-top:3pt;z-index:' || to_char
                                            when '0' then 'FALSE'
                                            else r_c.v
                                         end;
+                l_one_cell.string_len := length( l_one_cell.string_val );
               end if;
               pipe row( l_one_cell );
             end loop;
@@ -3040,11 +3113,24 @@ style="position:absolute;margin-left:35.25pt;margin-top:3pt;z-index:' || to_char
     --
     dbms_lob.freetemporary( l_workbook );
     dbms_lob.freetemporary( l_workbook_rels );
-    l_strings.delete;
+    if l_strings is not null
+    then
+      l_strings.delete;
+      l_string_lens.delete;
+      dbms_lob.freetemporary( l_shared_strings );
+    end if;
     l_date_styles.delete;
     l_time_styles.delete;
+    l_quote_prefix.delete;
     raise no_data_needed;
-  end;
+  end read;
   --
-end;
+  function get_version
+  return varchar2
+  is
+  begin
+    return c_version;
+  end get_version;
+  --
+end as_xlsx;
 /
