@@ -7,3 +7,5 @@ And this version does include an updated (finally using XMLtable :stuck_out_tong
 
 This is *italic* text.
 This is also _italic_ text.
+
+![Link an image.](/learn/azure-devops/shared/media/mara.png)
