@@ -100,8 +100,8 @@ begin
 end;
 ~~~
 ~~~
-    select *
-    from table( as_xlsx.read( as_xlsx.file2blob( 'MY_DIR', 'test.xlsx' ), '1' ) )
+  select *
+  from table( as_xlsx.read( as_xlsx.file2blob( 'MY_DIR', 'test.xlsx' ), '1' ) )
 ~~~
 ~~~
 begin
@@ -110,5 +110,43 @@ begin
   as_xlsx.add_image( 1, 1, as_barcode.barcode( 'https://github.com/antonscheffer/as_xlsx', 'QR' ) );
   as_xlsx.cell( 1, 8, 'now with png images' );
   as_xlsx.save( 'MY_DIR', 'my.xlsx' );
+end;
+~~~
+~~~
+declare
+  l_cnt pls_integer;
+  l_query sys_refcursor;
+begin
+  open l_query for
+    select date '1900-02-26' + level "Secret Date"
+         , to_char( date '1900-02-26' + level, 'yyyy mon dd' ) "Secret String"
+    from dual
+    connect by level < 8;
+  as_xlsx.clear_workbook;
+  as_xlsx.new_sheet;
+  l_cnt := as_xlsx.query2sheet
+             ( p_rc         => l_query
+             , p_sheet      => 1
+             , p_col        => 5
+             , p_row        => 3
+             , p_autofilter => true
+             , p_date_format => 'yyyy-mmm-dd'
+             , p_title      => 'My Secrets'
+             , p_title_xfid => as_xlsx.get_xfid( p_alignment => as_xlsx.get_alignment( p_horizontal => 'centerContinuous' ) )
+             );
+  as_xlsx.set_column_width( p_col   => 5
+                          , p_width => 15
+                           );
+  as_xlsx.set_column_width( p_col   => 6
+                          , p_width => 15
+                          );
+  as_xlsx.cell( 5
+              , l_cnt
+                 + 3  -- query start row
+                 + 2  -- title + headers 
+                 + 1  -- interval 
+              , 'Rows returned: ' || l_cnt );
+  -- make sure you have set as_xlsx.use_dbms_crypto = true; in the package specification
+  as_xlsx.save( 'MY_DIR', 'my.xlsx', 'demo' );
 end;
 ~~~
