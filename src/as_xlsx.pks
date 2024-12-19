@@ -65,9 +65,20 @@ is
 **     Added clob_val and string_len
 **   Date: 18-10-2024
 **     fix for add_image with images larger than 2000 bytes
+**   Date: 21-11-2024
+**     fix for dates before March 1900
+**     additions to query2sheet
+**   Date: 03-12-2024
+**     Some display properties for a sheet
+**   Date: 08-12-2024
+**     Add encryption
+**     Add null cells option to read function
+**     Added tables
+**     Fixed issues with using combinations
+**       of comments, images, hyperlinks and tables on multiple sheets
 ******************************************************************************
 ******************************************************************************
-Copyright (C) 2011, 2023 by Anton Scheffer
+Copyright (C) 2011, 2024 by Anton Scheffer
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -90,8 +101,9 @@ THE SOFTWARE.
 ******************************************************************************
 ******************************************** */
 --
-  use_utl_file constant boolean := true;
---
+  use_utl_file    constant boolean := true;
+  use_dbms_crypto constant boolean := false;
+  --
   type tp_alignment is record
     ( vertical varchar2(11)
     , horizontal varchar2(16)
@@ -117,8 +129,11 @@ THE SOFTWARE.
   procedure clear_workbook;
 --
   procedure new_sheet
-    ( p_sheetname varchar2 := null
-    , p_tabcolor varchar2 := null -- this is a hex ALPHA Red Green Blue value
+    ( p_sheetname      varchar2    := null
+    , p_tabcolor       varchar2    := null -- this is a hex ALPHA Red Green Blue value
+    , p_show_gridlines boolean     := null
+    , p_grid_color_idx pls_integer := null -- index in default color palette 0 - 65
+    , p_show_headers   boolean     := null
     );
 --
   function OraFmt2Excel( p_format varchar2 := null )
@@ -143,13 +158,35 @@ THE SOFTWARE.
     ( p_patternType varchar2
     , p_fgRGB varchar2 := null -- this is a hex ALPHA Red Green Blue value
     )
+/*
+none
+solid
+darkGray
+mediumGray
+lightGray
+gray125
+gray0625
+darkHorizontal
+darkVertical
+darkDown
+darkUp
+darkGrid
+darkTrellis
+lightHorizontal
+lightVertical
+lightDown
+lightUp
+lightGrid
+lightTrellis
+*/
   return pls_integer;
 --
   function get_border
-    ( p_top varchar2 := 'thin'
+    ( p_top    varchar2 := 'thin'
     , p_bottom varchar2 := 'thin'
-    , p_left varchar2 := 'thin'
-    , p_right varchar2 := 'thin'
+    , p_left   varchar2 := 'thin'
+    , p_right  varchar2 := 'thin'
+    , p_rgb    varchar2 := null -- this is a hex ALPHA Red Green Blue value
     )
 /*
 none
@@ -192,41 +229,53 @@ justify
 top
 */
   return tp_alignment;
---
+  --
+  function get_xfid
+    ( p_numFmtId  pls_integer  := null
+    , p_fontId    pls_integer  := null
+    , p_fillId    pls_integer  := null
+    , p_borderId  pls_integer  := null
+    , p_alignment tp_alignment := null
+    )
+  return pls_integer;
+  --
   procedure cell
-    ( p_col pls_integer
-    , p_row pls_integer
+    ( p_col   pls_integer
+    , p_row   pls_integer
     , p_value number
-    , p_numFmtId pls_integer := null
-    , p_fontId pls_integer := null
-    , p_fillId pls_integer := null
-    , p_borderId pls_integer := null
+    , p_numFmtId  pls_integer  := null
+    , p_fontId    pls_integer  := null
+    , p_fillId    pls_integer  := null
+    , p_borderId  pls_integer  := null
     , p_alignment tp_alignment := null
-    , p_sheet pls_integer := null
+    , p_sheet     pls_integer  := null
+    , p_xfId      pls_integer  := null
     );
 --
   procedure cell
-    ( p_col pls_integer
-    , p_row pls_integer
+    ( p_col   pls_integer
+    , p_row   pls_integer
     , p_value varchar2
-    , p_numFmtId pls_integer := null
-    , p_fontId pls_integer := null
-    , p_fillId pls_integer := null
-    , p_borderId pls_integer := null
+    , p_numFmtId  pls_integer  := null
+    , p_fontId    pls_integer  := null
+    , p_fillId    pls_integer  := null
+    , p_borderId  pls_integer  := null
     , p_alignment tp_alignment := null
-    , p_sheet pls_integer := null
+    , p_sheet     pls_integer  := null
+    , p_xfId      pls_integer  := null
     );
 --
   procedure cell
-    ( p_col pls_integer
-    , p_row pls_integer
+    ( p_col   pls_integer
+    , p_row   pls_integer
     , p_value date
-    , p_numFmtId pls_integer := null
-    , p_fontId pls_integer := null
-    , p_fillId pls_integer := null
-    , p_borderId pls_integer := null
+    , p_numFmtId  pls_integer  := null
+    , p_fontId    pls_integer  := null
+    , p_fillId    pls_integer  := null
+    , p_borderId  pls_integer  := null
     , p_alignment tp_alignment := null
-    , p_sheet pls_integer := null
+    , p_sheet     pls_integer  := null
+    , p_xfId      pls_integer  := null
     );
 --
   procedure hyperlink
@@ -347,41 +396,106 @@ top
     , p_sheet pls_integer := null
     );
 --
+  procedure set_table
+    ( p_column_start pls_integer
+    , p_column_end   pls_integer
+    , p_row_start    pls_integer
+    , p_row_end      pls_integer
+    , p_style        varchar2
+    , p_name         varchar2    := null
+    , p_sheet        pls_integer := null
+    );
+/* p_style
+  TableStyleLight1  - TableStyleLight21
+  TableStyleMedium1 - TableStyleMedium28
+  TableStyleDark1   - TableStyleDark11
+*/
+--
   procedure set_tabcolor
     ( p_tabcolor varchar2 -- this is a hex ALPHA Red Green Blue value
     , p_sheet pls_integer := null
     );
 --
-  function finish
+  function finish( p_password varchar2  := null )
   return blob;
 --
   procedure save
     ( p_directory varchar2
     , p_filename varchar2
+    , p_password varchar2 := null
     );
---
+  --
   procedure query2sheet
-    ( p_sql varchar2
-    , p_column_headers boolean := true
-    , p_directory varchar2 := null
-    , p_filename varchar2 := null
-    , p_sheet pls_integer := null
-    , p_UseXf boolean := false
+    ( p_sql            varchar2
+    , p_column_headers boolean     := true
+    , p_directory      varchar2    := null
+    , p_filename       varchar2    := null
+    , p_sheet          pls_integer := null
+    , p_UseXf          boolean     := false
+    , p_date_format    varchar2    := 'dd/mm/yyyy'
+    , p_title          varchar2    := null
+    , p_title_xfid     pls_integer := null
+    , p_col            pls_integer := null
+    , p_row            pls_integer := null
+    , p_autofilter     boolean     := null
+    , p_table_style    varchar2    := null
     );
---
+  --
   procedure query2sheet
-    ( p_rc in out sys_refcursor
-    , p_column_headers boolean := true
-    , p_directory varchar2 := null
-    , p_filename varchar2 := null
-    , p_sheet pls_integer := null
-    , p_UseXf boolean := false
+    ( p_rc             in out sys_refcursor
+    , p_column_headers boolean     := true
+    , p_directory      varchar2    := null
+    , p_filename       varchar2    := null
+    , p_sheet          pls_integer := null
+    , p_UseXf          boolean     := false
+    , p_date_format    varchar2    := 'dd/mm/yyyy'
+    , p_title          varchar2    := null
+    , p_title_xfid     pls_integer := null
+    , p_col            pls_integer := null
+    , p_row            pls_integer := null
+    , p_autofilter     boolean     := null
+    , p_table_style    varchar2    := null
     );
---
+  --
+  function query2sheet
+    ( p_sql            varchar2
+    , p_column_headers boolean     := true
+    , p_directory      varchar2    := null
+    , p_filename       varchar2    := null
+    , p_sheet          pls_integer := null
+    , p_UseXf          boolean     := false
+    , p_date_format    varchar2    := 'dd/mm/yyyy'
+    , p_title          varchar2    := null
+    , p_title_xfid     pls_integer := null
+    , p_col            pls_integer := null
+    , p_row            pls_integer := null
+    , p_autofilter     boolean     := null
+    , p_table_style    varchar2    := null
+    )
+  return number;  -- number of records returned by the query
+  --
+  function query2sheet
+    ( p_rc             in out sys_refcursor
+    , p_column_headers boolean     := true
+    , p_directory      varchar2    := null
+    , p_filename       varchar2    := null
+    , p_sheet          pls_integer := null
+    , p_UseXf          boolean     := false
+    , p_date_format    varchar2    := 'dd/mm/yyyy'
+    , p_title          varchar2    := null
+    , p_title_xfid     pls_integer := null
+    , p_col            pls_integer := null
+    , p_row            pls_integer := null
+    , p_autofilter     boolean     := null
+    , p_table_style    varchar2    := null
+    )
+  return number;  -- number of records returned by the query
+  --
   procedure setUseXf( p_val boolean := true );
 --
 /*
-use p_width and p_height to pass the size of an image which is not a png, jpg, or gif
+use p_width and p_height to pass the size of an image which is not a png, jpg, gif or bmp
+and even then I'm not sure if it will display an image :)
 */
   procedure add_image
     ( p_col pls_integer
@@ -397,10 +511,11 @@ use p_width and p_height to pass the size of an image which is not a png, jpg, o
     );
   --
   function read
-    ( p_xlsx          blob
-    , p_sheets        varchar2 := null
-    , p_cell          varchar2 := null
-    , p_include_clobs varchar2 := null
+    ( p_xlsx           blob
+    , p_sheets         varchar2 := null
+    , p_cell           varchar2 := null
+    , p_include_clobs  varchar2 := null
+    , p_add_empty_cols varchar2 := null
     )
   return tp_all_cells pipelined;
   --
