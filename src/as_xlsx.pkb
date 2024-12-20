@@ -3023,7 +3023,7 @@ $END
       set_table
         ( p_column_start => t_col + 1
         , p_column_end   => t_col + t_col_cnt
-        , p_row_start    => coalesce( p_row, 1 )
+        , p_row_start    => coalesce( p_row, 1 ) + case when p_title is null then 0 else 1 end
         , p_row_end      => t_cur_row - 1
         , p_style        => p_table_style
         , p_sheet        => t_sheet
