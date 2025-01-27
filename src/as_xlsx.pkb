@@ -1,7 +1,7 @@
 create or replace package body as_xlsx
 is
   --
-  c_version constant varchar2(20) := 'as_xlsx43';
+  c_version constant varchar2(20) := 'as_xlsx46';
 --
   c_lob_duration constant pls_integer := dbms_lob.call;
   c_LOCAL_FILE_HEADER        constant raw(4) := hextoraw( '504B0304' ); -- Local file header signature
@@ -849,9 +849,10 @@ $END
   begin
     workbook.sheets( t_sheet ).rows( p_row )( p_col ).value := p_value;
     workbook.sheets( t_sheet ).rows( p_row )( p_col ).style :=
-      coalesce( p_xfid
-              , get_XfId( t_sheet, p_col, p_row, p_numFmtId, p_fontId, p_fillId, p_borderId, p_alignment )
-              );
+      case when p_xfid is null
+        then get_XfId( t_sheet, p_col, p_row, p_numFmtId, p_fontId, p_fillId, p_borderId, p_alignment )
+        else 's="' || p_xfid || '"'
+      end;
   end;
 --
   function add_string( p_string varchar2 )
@@ -892,10 +893,11 @@ $END
     then
       t_alignment.wrapText := true;
     end if;
-    workbook.sheets( t_sheet ).rows( p_row )( p_col ).style := 't="s" ' ||
-      coalesce( p_xfid
-              , get_XfId( t_sheet, p_col, p_row, p_numFmtId, p_fontId, p_fillId, p_borderId, t_alignment )
-              );
+    workbook.sheets( t_sheet ).rows( p_row )( p_col ).style := 
+      case when p_xfid is null
+        then get_XfId( t_sheet, p_col, p_row, p_numFmtId, p_fontId, p_fillId, p_borderId, t_alignment )
+        else 's="' || p_xfid || '"'
+      end;
   end;
 --
   procedure cell
@@ -911,7 +913,7 @@ $END
     , p_xfId      pls_integer  := null
     )
   is
-    t_xfId     pls_integer := p_xfId;
+    t_xfId     varchar2(100);
     t_numFmtId pls_integer := p_numFmtId;
     t_sheet    pls_integer := nvl( p_sheet, workbook.sheets.count );
     t_tmp      number;
@@ -932,6 +934,8 @@ $END
         t_numFmtId := get_numFmt( 'dd/mm/yyyy' );
       end if;
       t_xfId := get_XfId( t_sheet, p_col, p_row, t_numFmtId, p_fontId, p_fillId, p_borderId, p_alignment );
+    else
+      t_xfId := 's="' || p_xfid || '"';
     end if;
     workbook.sheets( t_sheet ).rows( p_row )( p_col ).style := t_xfId;
   end;
@@ -3693,7 +3697,7 @@ $END
                                     , 'http://purl.oclc.org/ooxml/spreadsheetml/main' as "x" )
                      , '( /sst/si, /x:sst/x:si )'
                        passing xmltype( xmldata => l_shared_strings, csid => l_csid_utf8 )
-                       columns txt varchar2(4000 char) path 'substring( string-join(.//*:t/text(), "" ), 1, 3999 )'
+                       columns txt varchar2(4000 char) path 'substring( string-join(.//*:t/text(), "" ), 1, 3900 )'
                              , len integer             path 'string-length( string-join(.//*:t/text(), "" ) )'
                      ) xt1;
       elsif l_name like '%styles.xml' then
@@ -3816,7 +3820,7 @@ $END
                                               , r varchar2(32)   path '@r'
                                               , s integer        path '@s'
                                               , rw integer       path './../@r'
-                                              , txt varchar2(4000 char) path 'substring( string-join(.//*:t/text(), "" ), 1, 3999 )'
+                                              , txt varchar2(4000 char) path 'substring( string-join(.//*:t/text(), "" ), 1, 3900 )'
                                               , len integer             path 'string-length( string-join(.//*:t/text(), "" ) )'
                                       )
                        )
@@ -3870,7 +3874,7 @@ $END
                 then
                   l_one_cell.string_val := l_strings( to_number( r_c.v ) + 1 );
                   l_one_cell.string_len := l_string_lens( to_number( r_c.v ) + 1 );
-                  if l_one_cell.string_len > 3999 and substr( p_include_clobs, 1, 1 ) in ( 'Y', 'y', '1' )
+                  if l_one_cell.string_len > 3900 and substr( p_include_clobs, 1, 1 ) in ( 'Y', 'y', '1' )
                   then
                     select xt1.txt
                     into l_one_cell.clob_val
@@ -3926,7 +3930,7 @@ $END
                 l_one_cell.cell_type := 'S';
                 l_one_cell.string_val := r_c.txt;
                 l_one_cell.string_len := r_c.len;
-                if     l_one_cell.string_len > 3999
+                if     l_one_cell.string_len > 3900
                    and substr( p_include_clobs, 1, 1 ) in ( 'Y', 'y', '1' )
                    and r_c.r is not null
                 then
