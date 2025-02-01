@@ -1,7 +1,7 @@
 create or replace package body as_xlsx
 is
   --
-  c_version constant varchar2(20) := 'as_xlsx46';
+  c_version constant varchar2(20) := 'as_xlsx47';
 --
   c_lob_duration constant pls_integer := dbms_lob.call;
   c_LOCAL_FILE_HEADER        constant raw(4) := hextoraw( '504B0304' ); -- Local file header signature
@@ -893,7 +893,7 @@ $END
     then
       t_alignment.wrapText := true;
     end if;
-    workbook.sheets( t_sheet ).rows( p_row )( p_col ).style := 
+    workbook.sheets( t_sheet ).rows( p_row )( p_col ).style := 't="s" ' ||
       case when p_xfid is null
         then get_XfId( t_sheet, p_col, p_row, p_numFmtId, p_fontId, p_fillId, p_borderId, t_alignment )
         else 's="' || p_xfid || '"'
