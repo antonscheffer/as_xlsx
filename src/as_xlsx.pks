@@ -76,9 +76,13 @@ is
 **     Added tables
 **     Fixed issues with using combinations
 **       of comments, images, hyperlinks and tables on multiple sheets
+**   Date: 27-01-2025
+**      fixed issue with get_XfId
+**   Date: 01-02-2025
+**      fixed BUG with procedure cell with varchar2 value
 ******************************************************************************
 ******************************************************************************
-Copyright (C) 2011, 2024 by Anton Scheffer
+Copyright (C) 2011, 2025 by Anton Scheffer
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
