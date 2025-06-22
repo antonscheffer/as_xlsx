@@ -1,7 +1,7 @@
 create or replace package body as_xlsx
 is
   --
-  c_version constant varchar2(20) := 'as_xlsx47';
+  c_version constant varchar2(20) := 'as_xlsx48';
 --
   c_lob_duration constant pls_integer := dbms_lob.call;
   c_LOCAL_FILE_HEADER        constant raw(4) := hextoraw( '504B0304' ); -- Local file header signature
@@ -20,8 +20,9 @@ is
   type tp_row_fmts is table of tp_XF_fmt index by pls_integer;
   type tp_widths is table of number index by pls_integer;
   type tp_cell is record
-    ( value number
-    , style varchar2(50)
+    ( value   number
+    , style   varchar2(50)
+    , formula varchar2(1024)
     );
   type tp_cells is table of tp_cell index by pls_integer;
   type tp_rows is table of tp_cells index by pls_integer;
@@ -939,7 +940,67 @@ $END
     end if;
     workbook.sheets( t_sheet ).rows( p_row )( p_col ).style := t_xfId;
   end;
---
+  --
+  procedure num_formula
+    ( p_col           pls_integer
+    , p_row           pls_integer
+    , p_formula       varchar2
+    , p_default_value number := null
+    , p_numFmtId      pls_integer  := null
+    , p_fontId        pls_integer  := null
+    , p_fillId        pls_integer  := null
+    , p_borderId      pls_integer  := null
+    , p_alignment     tp_alignment := null
+    , p_sheet         pls_integer  := null
+    , p_xfId          pls_integer  := null
+    )
+  is
+    l_sheet pls_integer := nvl( p_sheet, workbook.sheets.count );
+  begin
+    cell( p_col, p_row, p_default_value, p_numFmtId, p_fontId, p_fillId, p_borderId, p_alignment, l_sheet, p_xfId );
+    workbook.sheets( l_sheet ).rows( p_row )( p_col ).formula := '<f>' || p_formula || '</f>';
+  end num_formula;
+  --
+  procedure str_formula
+    ( p_col           pls_integer
+    , p_row           pls_integer
+    , p_formula       varchar2
+    , p_default_value varchar2 := null
+    , p_numFmtId      pls_integer  := null
+    , p_fontId        pls_integer  := null
+    , p_fillId        pls_integer  := null
+    , p_borderId      pls_integer  := null
+    , p_alignment     tp_alignment := null
+    , p_sheet         pls_integer  := null
+    , p_xfId          pls_integer  := null
+    )
+  is
+    l_sheet pls_integer := nvl( p_sheet, workbook.sheets.count );
+  begin
+    cell( p_col, p_row, p_default_value, p_numFmtId, p_fontId, p_fillId, p_borderId, p_alignment, l_sheet, p_xfId );
+    workbook.sheets( l_sheet ).rows( p_row )( p_col ).formula := '<f>' || p_formula || '</f>';
+  end str_formula;
+  --
+  procedure date_formula
+    ( p_col           pls_integer
+    , p_row           pls_integer
+    , p_formula       varchar2
+    , p_default_value date := null
+    , p_numFmtId      pls_integer  := null
+    , p_fontId        pls_integer  := null
+    , p_fillId        pls_integer  := null
+    , p_borderId      pls_integer  := null
+    , p_alignment     tp_alignment := null
+    , p_sheet         pls_integer  := null
+    , p_xfId          pls_integer  := null
+    )
+  is
+    l_sheet pls_integer := nvl( p_sheet, workbook.sheets.count );
+  begin
+    cell( p_col, p_row, p_default_value, p_numFmtId, p_fontId, p_fillId, p_borderId, p_alignment, l_sheet, p_xfId );
+    workbook.sheets( l_sheet ).rows( p_row )( p_col ).formula := '<f>' || p_formula || '</f>';
+  end date_formula;
+  --
   procedure query_date_cell
     ( p_col pls_integer
     , p_row pls_integer
@@ -2517,7 +2578,7 @@ case when workbook.sheets( s ).tabcolor is not null then '<sheetPr>' || add_rgb(
         loop
           addtxt2utf8blob( '<c r="' || alfan_col( t_col_ind ) || t_row_ind || '"'
                  || ' ' || workbook.sheets( s ).rows( t_row_ind )( t_col_ind ).style
-                 || '><v>'
+                 || '>' || workbook.sheets( s ).rows( t_row_ind )( t_col_ind ).formula || '<v>'
                  || to_char( workbook.sheets( s ).rows( t_row_ind )( t_col_ind ).value, 'TM9', 'NLS_NUMERIC_CHARACTERS=.,' )
                  || '</v></c>', t_yyy );
           t_col_ind := workbook.sheets( s ).rows( t_row_ind ).next( t_col_ind );
@@ -3625,8 +3686,8 @@ $END
     then
       for i in 1 .. get_count( p_xlsx )
       loop
-      exit when not get_central_file_header( p_xlsx, null, i, null, l_cfh )
-             or lower( utl_raw.cast_to_varchar2( l_cfh.name1 ) ) like '%workbook.xml';
+        exit when not get_central_file_header( p_xlsx, null, i, null, l_cfh )
+               or lower( utl_raw.cast_to_varchar2( l_cfh.name1 ) ) like '%workbook.xml';
       end loop;
     end if;
     if l_cfh.original_len is null
@@ -3730,7 +3791,7 @@ $END
                    )
         loop
           if    r_n.id between 14 and 17
-             or instr( r_n.format, 'd' ) > 0
+             or ( instr( r_n.format, 'd' ) > 0 and instr( r_n.format, 'red' ) = 0 )
              or instr( r_n.format, 'y' ) > 0
           then
             l_date_styles( r_n.seq ) := null;
