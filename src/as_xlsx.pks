@@ -80,6 +80,10 @@ is
 **      fixed issue with get_XfId
 **   Date: 01-02-2025
 **      fixed BUG with procedure cell with varchar2 value
+**   Date: 17-06-2025
+**      fixed BUG with read dates
+**   Date: 22-06-2025
+**     added formulas again
 ******************************************************************************
 ******************************************************************************
 Copyright (C) 2011, 2025 by Anton Scheffer
@@ -291,7 +295,49 @@ top
     , p_location varchar2 := null
     , p_tooltip varchar2 := null
     );
---
+  --
+  procedure num_formula
+    ( p_col           pls_integer
+    , p_row           pls_integer
+    , p_formula       varchar2
+    , p_default_value number := null
+    , p_numFmtId      pls_integer  := null
+    , p_fontId        pls_integer  := null
+    , p_fillId        pls_integer  := null
+    , p_borderId      pls_integer  := null
+    , p_alignment     tp_alignment := null
+    , p_sheet         pls_integer  := null
+    , p_xfId          pls_integer  := null
+    );
+  --
+  procedure str_formula
+    ( p_col           pls_integer
+    , p_row           pls_integer
+    , p_formula       varchar2
+    , p_default_value varchar2 := null
+    , p_numFmtId      pls_integer  := null
+    , p_fontId        pls_integer  := null
+    , p_fillId        pls_integer  := null
+    , p_borderId      pls_integer  := null
+    , p_alignment     tp_alignment := null
+    , p_sheet         pls_integer  := null
+    , p_xfId          pls_integer  := null
+    );
+  --
+  procedure date_formula
+    ( p_col           pls_integer
+    , p_row           pls_integer
+    , p_formula       varchar2
+    , p_default_value date := null
+    , p_numFmtId      pls_integer  := null
+    , p_fontId        pls_integer  := null
+    , p_fillId        pls_integer  := null
+    , p_borderId      pls_integer  := null
+    , p_alignment     tp_alignment := null
+    , p_sheet         pls_integer  := null
+    , p_xfId          pls_integer  := null
+    );
+  --
   procedure comment
     ( p_col pls_integer
     , p_row pls_integer
