@@ -112,7 +112,6 @@ begin
   as_xlsx.save( 'MY_DIR', 'my.xlsx' );
 end;
 ~~~
-~~~
 declare
   l_cnt pls_integer;
   l_query sys_refcursor;
@@ -150,3 +149,23 @@ begin
   as_xlsx.save( 'MY_DIR', 'my.xlsx', 'demo' );
 end;
 ~~~
+begin
+  as_xlsx.clear_workbook;
+  as_xlsx.new_sheet;
+  as_xlsx.cell( 1, 1, 3 );
+  as_xlsx.cell( 1, 2, 5 );
+  as_xlsx.cell( 1, 3, 4 );
+  as_xlsx.num_formula( 2, 1, 'A6+B6' );
+  as_xlsx.num_formula( 2, 6, 'SUM(A1:A5)' );
+  as_xlsx.num_formula( 1, 6, 'SUM(A1:A2)' );
+  as_xlsx.date_formula( 5, 1, 'TODAY()', p_numFmtId => as_xlsx.get_numFmt( 'yyyy-mm-dd' ) );
+  as_xlsx.str_formula( 5, 3, 'LOWER(TEXT(TODAY(),"DDDD"))' );
+  as_xlsx.new_sheet;
+  as_xlsx.cell( 1, 1, 13 );
+  as_xlsx.cell( 1, 2, 15 );
+  as_xlsx.cell( 1, 3, 14 );
+  as_xlsx.num_formula( 2, 1, 'A6+B6' );
+  as_xlsx.num_formula( 2, 6, 'SUM(A1:A5)' );
+  as_xlsx.num_formula( 1, 6, 'SUM(A1:A2)' );
+  as_xlsx.save( 'MY_DIR', 'my.xlsx' );
+end;
