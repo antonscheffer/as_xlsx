@@ -84,6 +84,8 @@ is
 **      fixed BUG with read dates
 **   Date: 22-06-2025
 **     added formulas again
+**   Date: 14-08-2025
+**     added rotation
 ******************************************************************************
 ******************************************************************************
 Copyright (C) 2011, 2025 by Anton Scheffer
@@ -113,9 +115,10 @@ THE SOFTWARE.
   use_dbms_crypto constant boolean := false;
   --
   type tp_alignment is record
-    ( vertical varchar2(11)
+    ( vertical   varchar2(11)
     , horizontal varchar2(16)
-    , wrapText boolean
+    , wrapText   boolean
+    , rotation   number
     );
   type sheet_names is table of varchar2(4000);
   type tp_one_cell is record
@@ -215,9 +218,10 @@ slantDashDot
   return pls_integer;
 --
   function get_alignment
-    ( p_vertical varchar2 := null
+    ( p_vertical   varchar2 := null
     , p_horizontal varchar2 := null
-    , p_wrapText boolean := null
+    , p_wrapText   boolean  := null
+    , p_rotation   number   := null
     )
 /* horizontal
 center
@@ -235,6 +239,10 @@ center
 distributed
 justify
 top
+*/
+/* rotation
+  rotation in degrees
+  between 0 and 180
 */
   return tp_alignment;
   --
