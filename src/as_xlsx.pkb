@@ -1,7 +1,7 @@
 create or replace package body as_xlsx
 is
   --
-  c_version constant varchar2(20) := 'as_xlsx48';
+  c_version constant varchar2(20) := 'as_xlsx49';
 --
   c_lob_duration constant pls_integer := dbms_lob.call;
   c_LOCAL_FILE_HEADER        constant raw(4) := hextoraw( '504B0304' ); -- Local file header signature
@@ -727,14 +727,22 @@ $END
     ( p_vertical   varchar2 := null
     , p_horizontal varchar2 := null
     , p_wrapText   boolean  := null
+    , p_rotation   number   := null
     )
   return tp_alignment
   is
+    l_rotation number;
     t_rv tp_alignment;
   begin
+    l_rotation := round( p_rotation );
+    if l_rotation <= 0 or l_rotation > 180
+    then
+      l_rotation := null;
+    end if;
     t_rv.vertical   := p_vertical;
     t_rv.horizontal := p_horizontal;
     t_rv.wrapText   := p_wrapText;
+    t_rv.rotation   := l_rotation;
     return t_rv;
   end;
   --
@@ -758,6 +766,7 @@ $END
     if (   l_XF.numFmtId + l_XF.fontId + l_XF.fillId + l_XF.borderId = 0
        and l_XF.alignment.vertical   is null
        and l_XF.alignment.horizontal is null
+       and l_XF.alignment.rotation   is null
        and not nvl( l_XF.alignment.wrapText, false )
        )
     then
@@ -772,6 +781,7 @@ $END
          and workbook.cellXfs( i ).borderId = l_XF.borderId
          and nvl( workbook.cellXfs( i ).alignment.vertical, 'x' )   = nvl( l_XF.alignment.vertical, 'x' )
          and nvl( workbook.cellXfs( i ).alignment.horizontal, 'x' ) = nvl( l_XF.alignment.horizontal, 'x' )
+         and nvl( workbook.cellXfs( i ).alignment.rotation, -7815 ) = nvl( l_XF.alignment.rotation, -7815 )
          and nvl( workbook.cellXfs( i ).alignment.wrapText, false ) = nvl( l_XF.alignment.wrapText, false )
          )
       then
@@ -820,6 +830,7 @@ $END
                         ( coalesce( p_alignment.vertical, t_col_XF.alignment.vertical, t_row_XF.alignment.vertical )
                         , coalesce( p_alignment.horizontal, t_col_XF.alignment.horizontal, t_row_XF.alignment.horizontal )
                         , coalesce( p_alignment.wrapText, t_col_XF.alignment.wrapText, t_row_XF.alignment.wrapText )
+                        , coalesce( p_alignment.rotation, t_col_XF.alignment.rotation, t_row_XF.alignment.rotation )
                         );
     l_xfid := get_xfid( t_XF.numFmtId, t_XF.fontId, t_XF.fillId, t_XF.borderId, t_XF.alignment );
     if l_xfid is null
@@ -2163,11 +2174,13 @@ $END
       if (  workbook.cellXfs( x ).alignment.horizontal is not null
          or workbook.cellXfs( x ).alignment.vertical is not null
          or workbook.cellXfs( x ).alignment.wrapText
+         or workbook.cellXfs( x ).alignment.rotation is not null
          )
       then
         t_xxx := t_xxx || ( '<alignment' ||
           case when workbook.cellXfs( x ).alignment.horizontal is not null then ' horizontal="' || workbook.cellXfs( x ).alignment.horizontal || '"' end ||
           case when workbook.cellXfs( x ).alignment.vertical is not null then ' vertical="' || workbook.cellXfs( x ).alignment.vertical || '"' end ||
+          case when workbook.cellXfs( x ).alignment.rotation is not null then ' textRotation="' || round( workbook.cellXfs( x ).alignment.rotation ) || '"' end ||
           case when workbook.cellXfs( x ).alignment.wrapText then ' wrapText="true"' end || '/>' );
       end if;
       t_xxx := t_xxx || '</xf>';
