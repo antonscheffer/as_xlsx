@@ -1,7 +1,7 @@
 create or replace package body as_xlsx
 is
   --
-  c_version constant varchar2(20) := 'as_xlsx49';
+  c_version constant varchar2(20) := 'as_xlsx50';
 --
   c_lob_duration constant pls_integer := dbms_lob.call;
   c_LOCAL_FILE_HEADER        constant raw(4) := hextoraw( '504B0304' ); -- Local file header signature
@@ -2524,6 +2524,10 @@ $END
         t_col_max := greatest( t_col_max, nvl( workbook.sheets( s ).rows( t_row_ind ).last, t_col_max ) );
         t_row_ind := workbook.sheets( s ).rows.next( t_row_ind );
       end loop;
+      if t_col_min = 16384
+      then -- no "cell" in sheet, only images for instance see https://github.com/antonscheffer/as_xlsx/issues/23
+        t_col_min := t_col_max;
+      end if;
       addtxt2utf8blob_init( t_yyy );
       addtxt2utf8blob( '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:x14="http://schemas.microsoft.com/office/spreadsheetml/2009/9/main" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" mc:Ignorable="x14ac" xmlns:x14ac="http://schemas.microsoft.com/office/spreadsheetml/2009/9/ac">' ||
