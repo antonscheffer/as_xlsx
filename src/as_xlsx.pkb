@@ -3987,7 +3987,20 @@ $END
                   then
                     l_one_cell.date_val := date '1904-01-01' + l_nr;
                   else
-                    l_one_cell.date_val := date '1900-03-01' + ( l_nr - case when l_nr < 61 then 60 else 61 end );
+                    -- Fix for Excel 1900 "Leap Year" Bug
+                    if l_nr < 60 then
+                      -- Date is between Jan 1, 1900 and Feb 28, 1900
+                      -- Base date is Dec 31, 1899
+                      l_one_cell.date_val := to_date('31-12-1899','DD-MM-YYYY') + l_nr;
+                    elsif l_nr = 60 then
+                       -- Excel's non-existent "Feb 29, 1900".
+                       -- This date cannot be stored in an Oracle Date type.
+                       l_one_cell.date_val := null;
+                    else
+                       -- Date is Mar 1, 1900 or later
+                       -- Base date is Mar 1, 1900 (Excel Serial 61)
+                       l_one_cell.date_val := to_date('01-03-1900','DD-MM-YYYY') + ( l_nr - 61 );
+                    end if;
                   end if;
                 elsif l_time_styles.exists( r_c.s )
                 then
