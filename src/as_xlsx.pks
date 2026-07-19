@@ -86,6 +86,17 @@ is
 **     added formulas again
 **   Date: 14-08-2025
 **     added rotation
+**   Date: 15-08-2025
+**     remove ascii control chars from strings
+**   Date: 22-11-2025
+**     fix a bug when a sheet has no "cell", but only an image
+**     see https://github.com/antonscheffer/as_xlsx/issues/23
+**   Date: 13-07-2026
+**     Changed default theme to 2013 Office Theme
+**     Added a parameter p_theme to function finish and procedure save
+**       possible values for p_theme: 2023, 2013 or 2007
+**   Date: 18-07-2026
+**     Added parameter p_handle_invalid_1900_02_29 to function read
 ******************************************************************************
 ******************************************************************************
 Copyright (C) 2011, 2025 by Anton Scheffer
@@ -474,14 +485,28 @@ top
     , p_sheet pls_integer := null
     );
 --
-  function finish( p_password varchar2  := null )
+  function finish
+    ( p_password varchar2  := null
+    , p_theme    varchar2 := '2013'
+    )
   return blob;
+/* possible values for p_theme
+  2023
+  2013
+  2007
+*/
 --
   procedure save
     ( p_directory varchar2
-    , p_filename varchar2
-    , p_password varchar2 := null
+    , p_filename  varchar2
+    , p_password  varchar2 := null
+    , p_theme     varchar2 := '2013'
     );
+/* possible values for p_theme
+  2023
+  2013
+  2007
+*/
   --
   procedure query2sheet
     ( p_sql            varchar2
@@ -568,12 +593,21 @@ and even then I'm not sure if it will display an image :)
     , p_height pls_integer := null
     );
   --
+/*
+  Excel can contain an non existing leap date Februar 29, 1900
+  Use p_handle_invalid_1900_02_29 to determin how to handle this
+  - MARCH_1  change to March 1, 1900
+  - NULLIFY  nullify the value
+  - SKIP     skip the Cell
+  - ERROR    raise an error
+*/
   function read
-    ( p_xlsx           blob
-    , p_sheets         varchar2 := null
-    , p_cell           varchar2 := null
-    , p_include_clobs  varchar2 := null
-    , p_add_empty_cols varchar2 := null
+    ( p_xlsx                      blob
+    , p_sheets                    varchar2 := null
+    , p_cell                      varchar2 := null
+    , p_include_clobs             varchar2 := null
+    , p_add_empty_cols            varchar2 := null
+    , p_handle_invalid_1900_02_29 varchar2 := 'MARCH_1'
     )
   return tp_all_cells pipelined;
   --
