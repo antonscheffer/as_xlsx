@@ -1,13 +1,13 @@
 create or replace package body as_xlsx
 is
   --
-  c_version constant varchar2(20) := 'as_xlsx50';
---
+  c_version constant varchar2(20) := 'as_xlsx51';
+  --
   c_lob_duration constant pls_integer := dbms_lob.call;
   c_LOCAL_FILE_HEADER        constant raw(4) := hextoraw( '504B0304' ); -- Local file header signature
   c_CENTRAL_FILE_HEADER      constant raw(4) := hextoraw( '504B0102' ); -- Central directory file header signature
   c_END_OF_CENTRAL_DIRECTORY constant raw(4) := hextoraw( '504B0506' ); -- End of central directory signature
---
+  --
   type tp_XF_fmt is record
     ( numFmtId pls_integer
     , fontId pls_integer
@@ -1334,26 +1334,6 @@ $END
     workbook.tables( t_cnt ) := t_table;
   end;
 --
-/*
-  procedure add1xml
-    ( p_excel in out nocopy blob
-    , p_filename varchar2
-    , p_xml clob
-    )
-  is
-    t_tmp blob;
-    c_step constant number := 24396;
-  begin
-    dbms_lob.createtemporary( t_tmp, true );
-    for i in 0 .. trunc( length( p_xml ) / c_step )
-    loop
-      dbms_lob.append( t_tmp, utl_i18n.string_to_raw( substr( p_xml, i * c_step + 1, c_step ), 'AL32UTF8' ) );
-    end loop;
-    add1file( p_excel, p_filename, t_tmp );
-    dbms_lob.freetemporary( t_tmp );
-  end;
-*/
---
   procedure add1xml
     ( p_excel in out nocopy blob
     , p_filename varchar2
@@ -1374,7 +1354,7 @@ $END
       , dbms_lob.lobmaxsize
       , dest_offset
       , src_offset
-      ,  nls_charset_id( 'AL32UTF8'  )
+      , nls_charset_id( 'AL32UTF8'  )
       , lang_context
       , warning
       );
@@ -1954,7 +1934,10 @@ $THEN
   end excel_encrypt;
 $END
   --
-  function finish( p_password varchar2 := null )
+  function finish
+    ( p_password varchar2 := null
+    , p_theme    varchar2 := '2013'
+    )
   return blob
   is
     t_excel blob;
@@ -1970,6 +1953,11 @@ $END
     t_col_max pls_integer;
     t_col_ind pls_integer;
     t_len pls_integer;
+    c_control_chars constant varchar2(100) :=
+           chr(0)  || chr(1)  || chr(2)  || chr(3)  || chr(4)  || chr(5)  || chr(6)  || chr(7)  || chr(8)
+        || chr(11) || chr(12) || chr(13) || chr(15) || chr(16) || chr(17) || chr(18) || chr(19) || chr(20)
+        || chr(21) || chr(22) || chr(23) || chr(24) || chr(25) || chr(26) || chr(27) || chr(28) || chr(29)
+        || chr(30) || chr(31);
   begin
     dbms_lob.createtemporary( t_excel, true );
     t_xxx := '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -2198,14 +2186,18 @@ $END
 </extLst>
 </styleSheet>' );
     add1xml( t_excel, 'xl/styles.xml', t_xxx );
-    t_xxx := '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+    t_xxx := ( '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
 <fileVersion appName="xl" lastEdited="5" lowestEdited="5" rupBuild="9302"/>
-<workbookPr defaultThemeVersion="124226"/>
+<workbookPr defaultThemeVersion="' || case p_theme
+                                             when '2023' then '202300'
+                                             when '2007' then '124226'
+                                             else '166925'
+                                      end || '"/>
 <bookViews>
 <workbookView xWindow="120" yWindow="45" windowWidth="19155" windowHeight="4935"/>
 </bookViews>
-<sheets>';
+<sheets>' );
     s := workbook.sheets.first;
     while s is not null
     loop
@@ -2228,290 +2220,16 @@ $END
     end if;
     t_xxx := t_xxx || '<calcPr calcId="144525"/></workbook>';
     add1xml( t_excel, 'xl/workbook.xml', t_xxx );
-    t_xxx := '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="Office Theme">
-<a:themeElements>
-<a:clrScheme name="Office">
-<a:dk1>
-<a:sysClr val="windowText" lastClr="000000"/>
-</a:dk1>
-<a:lt1>
-<a:sysClr val="window" lastClr="FFFFFF"/>
-</a:lt1>
-<a:dk2>
-<a:srgbClr val="1F497D"/>
-</a:dk2>
-<a:lt2>
-<a:srgbClr val="EEECE1"/>
-</a:lt2>
-<a:accent1>
-<a:srgbClr val="4F81BD"/>
-</a:accent1>
-<a:accent2>
-<a:srgbClr val="C0504D"/>
-</a:accent2>
-<a:accent3>
-<a:srgbClr val="9BBB59"/>
-</a:accent3>
-<a:accent4>
-<a:srgbClr val="8064A2"/>
-</a:accent4>
-<a:accent5>
-<a:srgbClr val="4BACC6"/>
-</a:accent5>
-<a:accent6>
-<a:srgbClr val="F79646"/>
-</a:accent6>
-<a:hlink>
-<a:srgbClr val="0000FF"/>
-</a:hlink>
-<a:folHlink>
-<a:srgbClr val="800080"/>
-</a:folHlink>
-</a:clrScheme>
-<a:fontScheme name="Office">
-<a:majorFont>
-<a:latin typeface="Cambria"/>
-<a:ea typeface=""/>
-<a:cs typeface=""/>
-<a:font script="Jpan" typeface="MS P????"/>
-<a:font script="Hang" typeface="?? ??"/>
-<a:font script="Hans" typeface="??"/>
-<a:font script="Hant" typeface="????"/>
-<a:font script="Arab" typeface="Times New Roman"/>
-<a:font script="Hebr" typeface="Times New Roman"/>
-<a:font script="Thai" typeface="Tahoma"/>
-<a:font script="Ethi" typeface="Nyala"/>
-<a:font script="Beng" typeface="Vrinda"/>
-<a:font script="Gujr" typeface="Shruti"/>
-<a:font script="Khmr" typeface="MoolBoran"/>
-<a:font script="Knda" typeface="Tunga"/>
-<a:font script="Guru" typeface="Raavi"/>
-<a:font script="Cans" typeface="Euphemia"/>
-<a:font script="Cher" typeface="Plantagenet Cherokee"/>
-<a:font script="Yiii" typeface="Microsoft Yi Baiti"/>
-<a:font script="Tibt" typeface="Microsoft Himalaya"/>
-<a:font script="Thaa" typeface="MV Boli"/>
-<a:font script="Deva" typeface="Mangal"/>
-<a:font script="Telu" typeface="Gautami"/>
-<a:font script="Taml" typeface="Latha"/>
-<a:font script="Syrc" typeface="Estrangelo Edessa"/>
-<a:font script="Orya" typeface="Kalinga"/>
-<a:font script="Mlym" typeface="Kartika"/>
-<a:font script="Laoo" typeface="DokChampa"/>
-<a:font script="Sinh" typeface="Iskoola Pota"/>
-<a:font script="Mong" typeface="Mongolian Baiti"/>
-<a:font script="Viet" typeface="Times New Roman"/>
-<a:font script="Uigh" typeface="Microsoft Uighur"/>
-<a:font script="Geor" typeface="Sylfaen"/>
-</a:majorFont>
-<a:minorFont>
-<a:latin typeface="Calibri"/>
-<a:ea typeface=""/>
-<a:cs typeface=""/>
-<a:font script="Jpan" typeface="MS P????"/>
-<a:font script="Hang" typeface="?? ??"/>
-<a:font script="Hans" typeface="??"/>
-<a:font script="Hant" typeface="????"/>
-<a:font script="Arab" typeface="Arial"/>
-<a:font script="Hebr" typeface="Arial"/>
-<a:font script="Thai" typeface="Tahoma"/>
-<a:font script="Ethi" typeface="Nyala"/>
-<a:font script="Beng" typeface="Vrinda"/>
-<a:font script="Gujr" typeface="Shruti"/>
-<a:font script="Khmr" typeface="DaunPenh"/>
-<a:font script="Knda" typeface="Tunga"/>
-<a:font script="Guru" typeface="Raavi"/>
-<a:font script="Cans" typeface="Euphemia"/>
-<a:font script="Cher" typeface="Plantagenet Cherokee"/>
-<a:font script="Yiii" typeface="Microsoft Yi Baiti"/>
-<a:font script="Tibt" typeface="Microsoft Himalaya"/>
-<a:font script="Thaa" typeface="MV Boli"/>
-<a:font script="Deva" typeface="Mangal"/>
-<a:font script="Telu" typeface="Gautami"/>
-<a:font script="Taml" typeface="Latha"/>
-<a:font script="Syrc" typeface="Estrangelo Edessa"/>
-<a:font script="Orya" typeface="Kalinga"/>
-<a:font script="Mlym" typeface="Kartika"/>
-<a:font script="Laoo" typeface="DokChampa"/>
-<a:font script="Sinh" typeface="Iskoola Pota"/>
-<a:font script="Mong" typeface="Mongolian Baiti"/>
-<a:font script="Viet" typeface="Arial"/>
-<a:font script="Uigh" typeface="Microsoft Uighur"/>
-<a:font script="Geor" typeface="Sylfaen"/>
-</a:minorFont>
-</a:fontScheme>
-<a:fmtScheme name="Office">
-<a:fillStyleLst>
-<a:solidFill>
-<a:schemeClr val="phClr"/>
-</a:solidFill>
-<a:gradFill rotWithShape="1">
-<a:gsLst>
-<a:gs pos="0">
-<a:schemeClr val="phClr">
-<a:tint val="50000"/>
-<a:satMod val="300000"/>
-</a:schemeClr>
-</a:gs>
-<a:gs pos="35000">
-<a:schemeClr val="phClr">
-<a:tint val="37000"/>
-<a:satMod val="300000"/>
-</a:schemeClr>
-</a:gs>
-<a:gs pos="100000">
-<a:schemeClr val="phClr">
-<a:tint val="15000"/>
-<a:satMod val="350000"/>
-</a:schemeClr>
-</a:gs>
-</a:gsLst>
-<a:lin ang="16200000" scaled="1"/>
-</a:gradFill>
-<a:gradFill rotWithShape="1">
-<a:gsLst>
-<a:gs pos="0">
-<a:schemeClr val="phClr">
-<a:shade val="51000"/>
-<a:satMod val="130000"/>
-</a:schemeClr>
-</a:gs>
-<a:gs pos="80000">
-<a:schemeClr val="phClr">
-<a:shade val="93000"/>
-<a:satMod val="130000"/>
-</a:schemeClr>
-</a:gs>
-<a:gs pos="100000">
-<a:schemeClr val="phClr">
-<a:shade val="94000"/>
-<a:satMod val="135000"/>
-</a:schemeClr>
-</a:gs>
-</a:gsLst>
-<a:lin ang="16200000" scaled="0"/>
-</a:gradFill>
-</a:fillStyleLst>
-<a:lnStyleLst>
-<a:ln w="9525" cap="flat" cmpd="sng" algn="ctr">
-<a:solidFill>
-<a:schemeClr val="phClr">
-<a:shade val="95000"/>
-<a:satMod val="105000"/>
-</a:schemeClr>
-</a:solidFill>
-<a:prstDash val="solid"/>
-</a:ln>
-<a:ln w="25400" cap="flat" cmpd="sng" algn="ctr">
-<a:solidFill>
-<a:schemeClr val="phClr"/>
-</a:solidFill>
-<a:prstDash val="solid"/>
-</a:ln>
-<a:ln w="38100" cap="flat" cmpd="sng" algn="ctr">
-<a:solidFill>
-<a:schemeClr val="phClr"/>
-</a:solidFill>
-<a:prstDash val="solid"/>
-</a:ln>
-</a:lnStyleLst>
-<a:effectStyleLst>
-<a:effectStyle>
-<a:effectLst>
-<a:outerShdw blurRad="40000" dist="20000" dir="5400000" rotWithShape="0">
-<a:srgbClr val="000000">
-<a:alpha val="38000"/>
-</a:srgbClr>
-</a:outerShdw>
-</a:effectLst>
-</a:effectStyle>
-<a:effectStyle>
-<a:effectLst>
-<a:outerShdw blurRad="40000" dist="23000" dir="5400000" rotWithShape="0">
-<a:srgbClr val="000000">
-<a:alpha val="35000"/>
-</a:srgbClr>
-</a:outerShdw>
-</a:effectLst>
-</a:effectStyle>
-<a:effectStyle>
-<a:effectLst>
-<a:outerShdw blurRad="40000" dist="23000" dir="5400000" rotWithShape="0">
-<a:srgbClr val="000000">
-<a:alpha val="35000"/>
-</a:srgbClr>
-</a:outerShdw>
-</a:effectLst>
-<a:scene3d>
-<a:camera prst="orthographicFront">
-<a:rot lat="0" lon="0" rev="0"/>
-</a:camera>
-<a:lightRig rig="threePt" dir="t">
-<a:rot lat="0" lon="0" rev="1200000"/>
-</a:lightRig>
-</a:scene3d>
-<a:sp3d>
-<a:bevelT w="63500" h="25400"/>
-</a:sp3d>
-</a:effectStyle>
-</a:effectStyleLst>
-<a:bgFillStyleLst>
-<a:solidFill>
-<a:schemeClr val="phClr"/>
-</a:solidFill>
-<a:gradFill rotWithShape="1">
-<a:gsLst>
-<a:gs pos="0">
-<a:schemeClr val="phClr">
-<a:tint val="40000"/>
-<a:satMod val="350000"/>
-</a:schemeClr>
-</a:gs>
-<a:gs pos="40000">
-<a:schemeClr val="phClr">
-<a:tint val="45000"/>
-<a:shade val="99000"/>
-<a:satMod val="350000"/>
-</a:schemeClr>
-</a:gs>
-<a:gs pos="100000">
-<a:schemeClr val="phClr">
-<a:shade val="20000"/>
-<a:satMod val="255000"/>
-</a:schemeClr>
-</a:gs>
-</a:gsLst>
-<a:path path="circle">
-<a:fillToRect l="50000" t="-80000" r="50000" b="180000"/>
-</a:path>
-</a:gradFill>
-<a:gradFill rotWithShape="1">
-<a:gsLst>
-<a:gs pos="0">
-<a:schemeClr val="phClr">
-<a:tint val="80000"/>
-<a:satMod val="300000"/>
-</a:schemeClr>
-</a:gs>
-<a:gs pos="100000">
-<a:schemeClr val="phClr">
-<a:shade val="30000"/>
-<a:satMod val="200000"/>
-</a:schemeClr>
-</a:gs>
-</a:gsLst>
-<a:path path="circle">
-<a:fillToRect l="50000" t="50000" r="50000" b="50000"/>
-</a:path>
-</a:gradFill>
-</a:bgFillStyleLst>
-</a:fmtScheme>
-</a:themeElements>
-<a:objectDefaults/>
-<a:extraClrSchemeLst/>
-</a:theme>';
-    add1xml( t_excel, 'xl/theme/theme1.xml', t_xxx );
+    if p_theme = '2023'
+    then
+      t_yyy := utl_compress.lz_uncompress( utl_encode.base64_decode( utl_raw.cast_to_raw( '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' ) ) );
+    elsif p_theme = '2007'
+    then
+      t_yyy := utl_compress.lz_uncompress( utl_encode.base64_decode( utl_raw.cast_to_raw( 'H4sIAAAAAAAAA+1ZT2/bNhS/D9h3IHRvZdlS6gR1itix261NGyRuhx5piZZYU6JA0kl9G9rjgAHDumGXAbvtMGwr0AK7dJ8mW4etA/oV9vTHNhVTadJmWIfWB1skf+8/3+OjfPnK/ZihAyIk5UnHci42LEQSnwc0CTvW7eHgQttCUuEkwIwnpGPNiLSubH74wWW8oSISEwT0idzAHStSKt2wbenDNJYXeUoSWBtzEWMFQxHagcCHwDdmdrPRWLNjTBMLJTgGtrfGY+oTNMxYWptz5n0GX4mS2YTPxL6fS9QpcmwwcbIfOZM9JtABZh0L5AT8cEjuKwsxLBUsdKxG/rHszcv2goipGlqNbpB/SrqSIJg0czoRjhaEzsBdv7S94N8s+K/i+v1+r+8s+OUA7PtgqbOCdQdtpzvnqYGKx1XevYbXcKt4jX9rBb/e7Xa99Qq+tcS7K/h2Y83dalbw7hLvrerf3er11ip4b4lfW8EPLq2vuVV8DooYTSYr6Cyei8gsIGPOrhnhbYC35xtgibK13VXQJ6pur8X4HhcDAOTBxYomSM1SMsY+4Ho4HgmKMwF4g2BtpZjy5cpUJgtJX9BUdayPUwwZsYS8fPbjy2dP0Mtnj48ePD168MvRw4dHD342EF7DSagTvvj+i7+//RT99eS7F4++MuOljv/9p89++/VLM1DpwOdfP/7j6ePn33z+5w+PDPAtgUc6fEhjItFNcoj2eAy2GQSQkTgbxTDCtEKBI0AagH0VVYA3Z5iZcF1Sdd4dAQXABLw6vVfRdT8SU0UNwOtRXAHucM66XBjNuZ7J0s2ZJqFZuJjquD2MD0yye8dC25+msJOpiWUvIhU1dxlEG4ckIQpla3xCiIHsLqUVv+5QX3DJxwrdpaiLqdElQzpSZqJrNIa4zEwKQqgrvtm5g7qcmdhvk4MqEhICMxNLwipuvIqnCsdGjXHMdOQNrCKTkvsz4VccLhVEOiSMo35ApDTR3BKzirrXMVQiY9h32CyuIoWiExPyBuZcR27zSS/CcWrUmSaRjv1ITmCLYrTLlVEJXs2QbAxxwEltuO9Qos6W1rdpGJk3SLYyFaaUILyajzM2xiQp63ulUsc0OalsMwp1+33ZnsO34BAzJc/xYl2H+x+W6G08TXYJZMX7Cv2+Qr+LFboul8+/Li9Lsa332jmbuLbxHlPG9tWMkRsyL+ISzAsGMJkPcqJFn59G8FiKq+BCgfNnJLj6hKpoP8IpiHFyCaEsWYcSpVzC7cKq5Z1fUSnYnM9583sloLHa4UEx3dLvmws2+SiUuqBWxuC0wlqX3kyYUwBPKc3xzNK8E6XZmjchbxDO3iY4a81CNGwUzEiQ+b1gMA/LuYdIRjggZYwcoyFO65Rua7/aa5q09dabSTtNkHRxbo047xyi1FiJkr2ajiypjtAhaOU1PQv5OO1YY+i54DFOgZ/MShVmYdKxfFWa8spkPm6weVs6jVqDKyJSIdU2llFBlS/NX8ckS/2bnpv54XwMMFSj02nRajv/oRb28dCS8Zj4qmZmOSzX+FQRsR8Fh2jEpmIPg95usbsCKuGoaM4HAjLULTdeNfPLLDj+2qfMDszSCJc1qa3FvoDnzwsd8pGmnl2j+2ua0jpHU7x315Rs50KD2wryqxe0AQKjbI92LC5UxKEKpRH1BwIah1wW6IUgLTKVEMteYme6koNl3Sp4FEUujNQeDZGgUOlUJAjZVaWdr2DmNPXzdc6orDMLdWVa/I7IAWHDLHvXMvstFM2rSemIHHc8aLYpu0bh4C3ufNyazufk9mApyD1LL+JqRV87CtbfTIUzHrVNs8VN79RHbQrXFJR9QeGmwmfL/nbI9yD6aNFRItiIF9pl+i0mR6BzWzMuY/XvtlHLELRr4n2ezafm7FaNs08W9/rO9gy+9k52tb2aorZ2kclHK39m8dE9kL0N96MpU7J473QfLqW9+d8QwMdekm7+A/tipW2nGwAA' ) ) );
+    else
+      t_yyy := utl_compress.lz_uncompress( utl_encode.base64_decode( utl_raw.cast_to_raw( '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' ) ) );
+    end if;
+    add1file( t_excel, 'xl/theme/theme1.xml', t_yyy );
     s := workbook.sheets.first;
     while s is not null
     loop
@@ -2895,7 +2613,14 @@ style="position:absolute;margin-left:35.25pt;margin-top:3pt;z-index:' || to_char
                   );
     for i in 0 .. workbook.str_ind.count - 1
     loop
-      addtxt2utf8blob( '<si><t xml:space="preserve">' || dbms_xmlgen.convert( substr( workbook.str_ind( i ), 1, 32000 ) ) || '</t></si>', t_yyy );
+      addtxt2utf8blob( '<si><t xml:space="preserve">' ||
+                       dbms_xmlgen.convert(
+                         substr
+                           ( translate( workbook.str_ind( i )
+                                      , '#' || c_control_chars
+                                      , '#'
+                                      )
+                           , 1, 32000 ) ) || '</t></si>', t_yyy );
     end loop;
     addtxt2utf8blob( '</sst>', t_yyy );
     addtxt2utf8blob_finish( t_yyy );
@@ -2917,12 +2642,13 @@ $END
 --
   procedure save
     ( p_directory varchar2
-    , p_filename varchar2
-    , p_password varchar2 := null
+    , p_filename  varchar2
+    , p_password  varchar2 := null
+    , p_theme     varchar2 := '2013'
     )
   is
   begin
-    blob2file( finish( p_password ), p_directory, p_filename );
+    blob2file( finish( p_password, p_theme ), p_directory, p_filename );
   end;
 --
   function query2sheet
@@ -3726,11 +3452,12 @@ $END
   end get_sheet_names;
   --
   function read
-    ( p_xlsx           blob
-    , p_sheets         varchar2 := null
-    , p_cell           varchar2 := null
-    , p_include_clobs  varchar2 := null
-    , p_add_empty_cols varchar2 := null
+    ( p_xlsx                      blob
+    , p_sheets                    varchar2 := null
+    , p_cell                      varchar2 := null
+    , p_include_clobs             varchar2 := null
+    , p_add_empty_cols            varchar2 := null
+    , p_handle_invalid_1900_02_29 varchar2 := 'MARCH_1'
     )
   return tp_all_cells pipelined
   is
@@ -3987,7 +3714,23 @@ $END
                   then
                     l_one_cell.date_val := date '1904-01-01' + l_nr;
                   else
-                    l_one_cell.date_val := date '1900-03-01' + ( l_nr - case when l_nr < 61 then 60 else 61 end );
+                    if l_nr = 60 and upper( substr( p_handle_invalid_1900_02_29, 1, 1 ) ) in ( 'N', 'S', 'E' )
+                    then
+                      case upper( substr( p_handle_invalid_1900_02_29, 1, 1 ) )
+                        when 'E' then
+                          raise_application_error( -20020, r_x.name || ' contains invalid date Februar 29, 1900 at ' || r_c.r );
+                        when 'S' then
+                          if l_empty_cols
+                          then
+                            l_one_cell.cell_type := 'S';
+                          else
+                            continue;
+                          end if;
+                        else null;
+                      end case;
+                    else
+                      l_one_cell.date_val := date '1900-03-01' + ( l_nr - case when l_nr < 61 then 60 else 61 end );
+                    end if;
                   end if;
                 elsif l_time_styles.exists( r_c.s )
                 then
